@@ -7,13 +7,21 @@ metadata:
     release: prometheus
 spec:
   groups:
-    - name: qoves-api
-      rules:
-        - alert: APIHealthCheckFailing
-          expr: rate(healthz_errors_total[5m]) > 0
-          for: 1m
-          labels:
-            severity: critical
-          annotations:
-            summary: "QOVES API health check is failing"
-            description: "The API /healthz endpoint has been returning errors for over 1 minute — the database connection is likely down. Actionable: check postgres-0 pod status and PVC binding."
+  - name: qoves-api
+    rules:
+    - alert: APIDown
+      expr: up{namespace="default-dev", job="serviceMonitor/default-dev/qoves-api/0"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "QOVES API is down"
+        description: "The API has been unreachable for 1 minute. Check pod status and logs."
+    - alert: APIHighErrorRate
+      expr: rate(http_requests_total{namespace="default-dev", job="serviceMonitor/default-dev/qoves-api/0", code=~"5.."}[5m]) > 0.05
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High 5xx error rate on API"
+        description: "API returning >5% 5xx errors. Check database connectivity and application logs."
