@@ -232,9 +232,9 @@ Symptom: `APIHealthCheckFailing` alert fires; `/healthz` returns 503; API logs s
 
 **Decision:** Kyverno admission controller enforcing signed images via cosign.
 
-The API image is signed with a cosign keypair (private key encrypted, public key in repo at stretch/supply-chain/qoves-cosign.pub). A local OCI registry runs in-cluster at container-registry:5000. Two Kyverno ClusterPolicies enforce:
-- estrict-image-registries — only images from the local trusted registry may run
-- erify-image-signature — all images must carry a valid cosign signature verified against the public key
+The API image is signed with a cosign keypair (private key encrypted, public key in repo at `stretch/supply-chain/qoves-cosign.pub`). A local OCI registry runs in-cluster at `container-registry:5000`. Two Kyverno ClusterPolicies enforce:
+- `restrict-image-registries` — only images from the local trusted registry may run
+- `verify-image-signature` — all images must carry a valid cosign signature verified against the public key
 
 In production this would extend to: registry allowlisting by domain, digest pinning, and integration with a cloud KMS for key rotation.
 
@@ -242,10 +242,10 @@ In production this would extend to: registry allowlisting by domain, digest pinn
 
 **Decision:** NetworkPolicy isolates API pods to exactly one external IP.
 
-The llow-api-egress-external policy permits the API pod to egress to 140.82.121.6:443 (GitHub API) and blocks all other external destinations. Combined with the existing default-deny-egress, llow-dns-egress, and llow-api-to-postgres policies, the only traffic leaving the API pod is:
+The `allow-api-egress-external` policy permits the API pod to egress to `140.82.121.6:443` (GitHub API) and blocks all other external destinations. Combined with the existing default-deny-egress, `allow-dns-egress`, and `allow-api-to-postgres` policies, the only traffic leaving the API pod is:
 - DNS queries to kube-system (port 53)
 - PostgreSQL on port 5432
-- pi.github.com on port 443
+- `api.github.com` on port 443
 
 All other egress is silently dropped by Calico iptables rules.
 
