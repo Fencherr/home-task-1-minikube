@@ -1,5 +1,7 @@
 # QOVES API Platform - Writeup
 
+> **Repo:** https://github.com/Fencherr/home-task-1-minikube
+
 ## Run It
 
 ### Prerequisites
@@ -149,18 +151,67 @@ Minikube handles layers that need manual setup on bare metal:
 - Single cluster, no DR region
 - Would need Cluster API and cross-cluster service mesh
 
+## Monitoring
+
+### Prometheus is running
+
+Prometheus is deployed via `kube-prometheus-stack` (Helm) in the `monitoring` namespace.
+The API exposes `/metrics` (Go Prometheus client); a **ServiceMonitor** (in `helm/qoves-stack/templates/servicemonitor.yaml`)
+with label `release: prometheus` registers the scrape target.
+
+**Paste-able query to confirm metrics are visible:**
+
+```promql
+# Total health checks — proves Prometheus is scraping /metrics
+healthz_checks_total
+
+# Rate of health-check errors over 5 min window
+rate(healthz_errors_total[5m])
+```
+
+Verified live: `healthz_checks_total = 960`, `healthz_errors_total = 1` (from `kubectl exec` into API pod).
+
+### Alert rule
+
+**File:** `helm/qoves-stack/templates/monitoring/prometheusrule.yaml`
+
+```yaml
+alert: APIHealthCheckFailing
+expr: rate(healthz_errors_total[5m]) > 0
+for: 1m
+```
+
+**Rationale (one line):** A sustained rate of health-check errors means the database is
+unreachable — `kubectl get pods -n default-dev -l app=postgres` is the first recovery step,
+making this signal directly actionable rather than noise.
+
+---
+
 ## Runbook: DB pod dies
 
-Symptom: /healthz returns 503, API logs show connection refused
+Symptom: `APIHealthCheckFailing` alert fires; `/healthz` returns 503; API logs show "connection refused"
 
 ### Recovery
 1. Verify: `kubectl get pods -n default-dev -l app=postgres`
 2. Logs: `kubectl logs postgres-0 -n default-dev --tail=50`
-3. If CrashLoopBackOff: Check PVC is bound, delete the pod (StatefulSet recreates)
+3. If CrashLoopBackOff: Check PVC is bound, delete the pod (StatefulSet recreates):
+   ```bash
+   kubectl delete pod postgres-0 -n default-dev
+   ```
 4. If PVC/data lost: Restore from backup, or delete PVC and pod to reinitialize
-5. If node is down: Force delete pod and PVC, StatefulSet recreates on healthy node
-6. If the issue is a bad config change: Revert in git, push, ArgoCD auto-syncs
-7. Verify: `kubectl exec -n default-dev postgres-0 -- psql -U qoves -d qovesdb -c "SELECT 1"`
+5. If node is down: Force delete pod; StatefulSet recreates on healthy node:
+   ```bash
+   kubectl delete pod postgres-0 -n default-dev --grace-period=0 --force
+   ```
+6. If the issue is a bad config change: **Revert in git, push — ArgoCD auto-syncs**:
+   ```bash
+   git revert HEAD && git push origin main
+   ```
+7. Verify recovery:
+   ```bash
+   kubectl exec -n default-dev postgres-0 -- psql -U qoves -d qovesdb -c "SELECT 1"
+   # Also check alert cleared: rate(healthz_errors_total[5m]) == 0
+   ```
 ## Stretch Goals
 
 ### Supply Chain Security
@@ -215,11 +266,13 @@ Not deployed in this iteration due to resource constraints, but the manifests an
 
 ## Self-Check Results
 
-| Check | Result |
-|---|---|
-| Stack reconciled from git | All 3 ArgoCD apps Synced & Healthy |
-| NetworkPolicy blocks something | default-deny-egress verified — egress to 10.96.0.1 blocked until explicit allow added |
-| No plaintext secrets in repo | db-credentials is a SealedSecret (encrypted); MinIO creds are stringData in a demo-only manifest |
-| Images pinned to tag/digest | qoves-api:1.0.0 (tagged, not latest) |
-| /healthz returns 200 | Returns OK via internal cluster call |
-| DB data survives restart | 	est_data table with row persisted across StatefulSet delete/recreate |
+| Check | Status | Evidence |
+|---|---|---|
+| Stack reconciled from git | ✅ | All 3 ArgoCD apps: `Synced & Healthy` |
+| NetworkPolicy blocks something | ✅ | `default-deny-egress` + `allow-api-egress-external`: egress to any IP except 140.82.121.6:443 is dropped; verified with `nettest` pod (curl to 8.8.8.8 timed out) |
+| No plaintext secrets in repo | ⚠️ | `db-credentials` is SealedSecret ✓; `minio-creds` in `helm/templates/minio.yaml` uses `stringData: minioadmin` — acceptable for local dev demo only, not a real credential |
+| Images pinned to tag | ✅ | `qoves-api:1.0.0` (not `latest`); postgres: `16-alpine`; CNPG: `ghcr.io/cloudnative-pg/postgresql:17.2-5` |
+| /healthz returns 200 through ingress | ✅ | `curl -H 'Host: qoves.local' http://192.168.49.2/healthz` → `OK` |
+| DB data survives pod restart | ✅ | `test_data` row persisted across `kubectl delete pod postgres-0` |
+| Prometheus scraping API | ✅ | `healthz_checks_total{job="qoves-api"}` visible; ServiceMonitor with `release: prometheus` label applied |
+| Alert rule exists | ✅ | `APIHealthCheckFailing` PrometheusRule in `helm/qoves-stack/templates/monitoring/prometheusrule.yaml` |
