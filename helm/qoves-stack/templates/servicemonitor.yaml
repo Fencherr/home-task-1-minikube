@@ -3,6 +3,8 @@ kind: ServiceMonitor
 metadata:
   name: qoves-api
   namespace: default-dev
+  labels:
+    release: prometheus
 spec:
   selector:
     matchLabels:

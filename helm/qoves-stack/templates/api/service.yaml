@@ -6,8 +6,10 @@ metadata:
   labels:
     app: qoves-api
 spec:
-  ports:
-    - port: 8080
-      targetPort: 8080
   selector:
     app: qoves-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
