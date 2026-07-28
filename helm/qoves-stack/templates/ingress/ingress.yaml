@@ -3,6 +3,8 @@ kind: Ingress
 metadata:
   name: qoves-api
   namespace: default-dev
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
   ingressClassName: nginx
   rules:
