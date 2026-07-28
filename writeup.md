@@ -117,6 +117,20 @@ request rate via Prometheus custom metrics. CPU is acceptable for v1; I would mi
 to request-based (KEDA) or latency-based scaling in production using the
 `http_requests_total` metric exposed by the API.
 
+## Storage & Data (Section F Reasoning)
+
+1. **Access Mode & Scheduling Constraints**:
+   - **Access Mode**: `ReadWriteOnce` (RWO).
+   - **Scheduling Impact**: RWO locks the volume to a single worker node at any given time. The Kubernetes scheduler is constrained to place the `postgres-0` pod strictly on the specific node where the underlying volume/disk resides (node affinity constraint).
+
+2. **Pod vs Node Failure Impact**:
+   - **Pod Dies**: Data is completely safe. The PVC lifecycle is independent of the Pod. The StatefulSet controller automatically recreates `postgres-0` and re-mounts the existing PVC.
+   - **Node Dies**: On local `hostPath` (minikube default), data attached to that specific host path is lost if the host node is destroyed. In a production environment with cloud block storage (e.g. AWS EBS or GCP Persistent Disk), the PV detaches from the dead node and re-attaches when the pod is rescheduled onto a healthy node within the same Availability Zone.
+
+3. **Backup & Restore Strategy**:
+   - **Logical & Physical Backups**: Scheduled WAL archiving and base backups via `pgBackRest` or CloudNativePG `barman-cloud-backup` targeting S3/MinIO object storage.
+   - **Volume Snapshots / Disaster Recovery**: CSI VolumeSnapshots or cluster-level backup tools like Velero for point-in-time recovery (PITR).
+
 ## What minikube did for me
 
 Minikube handles layers that need manual setup on bare metal:
