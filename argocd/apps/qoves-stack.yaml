@@ -1,19 +1,27 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root
+  name: qoves-stack
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/Fencherr/home-task-1-minikube.git
     targetRevision: HEAD
-    path: argocd/apps
-    directory:
-      recurse: true
+    path: helm/qoves-stack
+    helm:
+      valueFiles:
+        - values.yaml
   destination:
     server: https://kubernetes.default.svc
+    namespace: default-dev
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
