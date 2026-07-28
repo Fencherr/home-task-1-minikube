@@ -19,8 +19,6 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - Replace=true
     retry:
       limit: 3
       backoff:
