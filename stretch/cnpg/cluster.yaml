@@ -1,0 +1,22 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-cnpg
+  namespace: default-dev
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.2-5
+  storage:
+    size: 1Gi
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://qoves-backups/
+      endpointURL: http://minio.default-dev.svc.cluster.local:9000
+      s3Credentials:
+        accessKeyId:
+          name: minio-creds
+          key: root-user
+        secretAccessKey:
+          name: minio-creds
+          key: root-password
+    retentionPolicy: 7d

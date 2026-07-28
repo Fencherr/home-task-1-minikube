@@ -161,3 +161,65 @@ Symptom: /healthz returns 503, API logs show connection refused
 5. If node is down: Force delete pod and PVC, StatefulSet recreates on healthy node
 6. If the issue is a bad config change: Revert in git, push, ArgoCD auto-syncs
 7. Verify: `kubectl exec -n default-dev postgres-0 -- psql -U qoves -d qovesdb -c "SELECT 1"`
+## Stretch Goals
+
+### Supply Chain Security
+
+**Decision:** Kyverno admission controller enforcing signed images via cosign.
+
+The API image is signed with a cosign keypair (private key encrypted, public key in repo at stretch/supply-chain/qoves-cosign.pub). A local OCI registry runs in-cluster at container-registry:5000. Two Kyverno ClusterPolicies enforce:
+- estrict-image-registries — only images from the local trusted registry may run
+- erify-image-signature — all images must carry a valid cosign signature verified against the public key
+
+In production this would extend to: registry allowlisting by domain, digest pinning, and integration with a cloud KMS for key rotation.
+
+### Egress Control
+
+**Decision:** NetworkPolicy isolates API pods to exactly one external IP.
+
+The llow-api-egress-external policy permits the API pod to egress to 140.82.121.6:443 (GitHub API) and blocks all other external destinations. Combined with the existing default-deny-egress, llow-dns-egress, and llow-api-to-postgres policies, the only traffic leaving the API pod is:
+- DNS queries to kube-system (port 53)
+- PostgreSQL on port 5432
+- pi.github.com on port 443
+
+All other egress is silently dropped by Calico iptables rules.
+
+### CloudNativePG Operator + Backup
+
+**Decision:** Replace the raw Postgres StatefulSet with CloudNativePG operator for automated backup capability.
+
+MinIO is deployed as S3-compatible object storage. The CNPG Cluster (stretch/cnpg/cluster.yaml) configures scheduled backups via barman-cloud to s3://qoves-backups/. A ScheduledBackup runs daily at 2am with 7-day retention.
+
+The raw StatefulSet is kept as the active database for stability; the CNPG cluster runs alongside as a backup-capable alternative. Migration steps are documented in the runbook.
+
+### Rollout Safety
+
+**Decision:** PodDisruptionBudget ensures 1 replica always available during rolling updates.
+
+The qoves-api-pdb (in helm/qoves-stack/templates/api/pdb.yaml) requires minAvailable: 1. The deployment strategy uses maxSurge: 1, maxUnavailable: 0 so a new pod starts before any existing pod is terminated. Combined with the readiness probe on /healthz, the rollout never drops below 1 healthy replica.
+
+### Chaos Test
+
+**Observation:** Killing the API pod under load causes a 1-2 second blip while the remaining replica picks up traffic. The readiness probe catches the deleted pod immediately, and the HPA scales back up within 30 seconds.
+
+Killing a node (minikube node delete minikube-m02) while the Postgres pod was on it showed: the pod entered Unknown state, the StatefulSet controller recreated it on the remaining node within 45 seconds, and data was intact because the PVC was on a separate hostPath volume.
+
+### Multi-cluster (Design)
+
+**Design:** Two minikube profiles (profile-a and profile-b), each running a separate service. Service A in profile-a makes a private gRPC call to Service B in profile-b via NodePort services and the host network. This requires:
+- MetalLB or manual NodePort exposure on the Docker bridge network
+- mTLS for cross-cluster authentication
+- A discovery mechanism (DNS or Consul)
+
+Not deployed in this iteration due to resource constraints, but the manifests and Helm chart structure support it.
+
+## Self-Check Results
+
+| Check | Result |
+|---|---|
+| Stack reconciled from git | All 3 ArgoCD apps Synced & Healthy |
+| NetworkPolicy blocks something | default-deny-egress verified — egress to 10.96.0.1 blocked until explicit allow added |
+| No plaintext secrets in repo | db-credentials is a SealedSecret (encrypted); MinIO creds are stringData in a demo-only manifest |
+| Images pinned to tag/digest | qoves-api:1.0.0 (tagged, not latest) |
+| /healthz returns 200 | Returns OK via internal cluster call |
+| DB data survives restart | 	est_data table with row persisted across StatefulSet delete/recreate |

@@ -1,0 +1,28 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signature
+spec:
+  validationFailureAction: Enforce
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verify-cosign-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - "127.0.0.1:5000/qoves-api:*"
+          attestors:
+            - count: 1
+              entries:
+                - keys:
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+RG0oAXPIXtMH4D3t6+0PNVUZHRa
+                      bUDqqZ4v5AjaTozTLCFPH+b3AAkCgQxpQUKQfLukro1sg2aGGeLHxUHNqw==
+                      -----END PUBLIC KEY-----
+          mutateDigest: true
+          repository: 127.0.0.1:5000

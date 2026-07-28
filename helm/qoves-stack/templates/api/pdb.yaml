@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: qoves-api-pdb
+  namespace: default-dev
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: qoves-api
