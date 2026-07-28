@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: qoves-api
+  namespace: default-dev
+spec:
+  selector:
+    matchLabels:
+      app: qoves-api
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
