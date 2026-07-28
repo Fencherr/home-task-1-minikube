@@ -8,9 +8,13 @@ spec:
   source:
     repoURL: https://github.com/Fencherr/home-task-1-minikube.git
     targetRevision: HEAD
-    path: argocd/apps
+    path: helm/qoves-stack
+    helm:
+      valueFiles:
+        - values.yaml
   destination:
     server: https://kubernetes.default.svc
+    namespace: argocd
   syncPolicy:
     automated:
       prune: true

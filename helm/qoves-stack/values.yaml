@@ -1,0 +1,30 @@
+api:
+  image: qoves-api
+  tag: 1.0.1
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+postgres:
+  image: postgres
+  tag: 16-alpine
+  storage: 1Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+hpa:
+  minReplicas: 2
+  maxReplicas: 10
+  cpuTargetUtilization: 70
+
+namespace: default-dev
