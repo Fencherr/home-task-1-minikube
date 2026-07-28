@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qoves-api
+  namespace: default-dev
+  labels:
+    app: qoves-api
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: qoves-api

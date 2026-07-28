@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: qoves-api
+  namespace: default-dev
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qoves-api
+  endpoints:
+    - port: "8080"
+      path: /metrics
+      interval: 15s

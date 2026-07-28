@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: qoves-api-alerts
+  namespace: default-dev
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: qoves-api
+      rules:
+        - alert: APIHealthCheckFailing
+          expr: rate(healthz_errors_total[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "QOVES API health check is failing"
+            description: "The API health check has been failing for over 1 minute"
