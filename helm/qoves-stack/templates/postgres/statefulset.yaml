@@ -19,13 +19,9 @@ spec:
           image: postgres:16-alpine
           ports:
             - containerPort: 5432
-          env:
-            - name: POSTGRES_USER
-              value: qoves
-            - name: POSTGRES_PASSWORD
-              value: <PASSWORD>
-            - name: POSTGRES_DB
-              value: qovesdb
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
           resources:
             requests:
               memory: "256Mi"
